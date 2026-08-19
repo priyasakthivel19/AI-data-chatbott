@@ -1,11 +1,22 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
+import os
+import json
 
 
 def init_firebase():
-    """Firebase ah initialize pannurom - once mattum run aagum"""
+    """Firebase ah initialize pannurom - local file or environment variable irundhu"""
     if not firebase_admin._apps:
-        cred = credentials.Certificate("firebase_credentials.json")
+        firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
+
+        if firebase_creds_env:
+            # Render la - environment variable irundhu padikurom
+            cred_dict = json.loads(firebase_creds_env)
+            cred = credentials.Certificate(cred_dict)
+        else:
+            # Local la - file irundhu padikurom
+            cred = credentials.Certificate("firebase_credentials.json")
+
         firebase_admin.initialize_app(cred)
     return firestore.client()
 
