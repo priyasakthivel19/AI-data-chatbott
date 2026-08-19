@@ -5,25 +5,34 @@ import json
 
 
 def init_firebase():
-    """Firebase ah initialize pannurom - local file or environment variable irundhu"""
+    """Initialize Firebase - reads credentials from a local file or an environment variable"""
     if not firebase_admin._apps:
         firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
 
         if firebase_creds_env:
-            # Render la - environment variable irundhu padikurom
+            # On Render - read from environment variable
             cred_dict = json.loads(firebase_creds_env)
             cred = credentials.Certificate(cred_dict)
         else:
-            # Local la - file irundhu padikurom
+            # Local - read from file
             cred = credentials.Certificate("firebase_credentials.json")
 
         firebase_admin.initialize_app(cred)
     return firestore.client()
 
 
-def save_chat_history(db, question, answer):
-    """Chat history ah Firebase la save pannurom"""
-    doc_ref = db.collection("chat_history").document()
+def save_chat_history(db, user_id, question, answer):
+    """Save chat history to Firestore, scoped under the logged-in user's ID.
+
+    Firestore structure: users/{user_id}/chat_history/{document_id}
+    This keeps each user's chat history isolated from every other user.
+    """
+    doc_ref = (
+        db.collection("users")
+        .document(user_id)
+        .collection("chat_history")
+        .document()
+    )
     doc_ref.set({
         "question": question,
         "answer": answer,
@@ -31,9 +40,15 @@ def save_chat_history(db, question, answer):
     })
 
 
-def get_chat_history(db):
-    """Ella chat history ah retrieve pannurom"""
-    docs = db.collection("chat_history").order_by("timestamp").stream()
+def get_chat_history(db, user_id):
+    """Retrieve chat history for a specific user only (not other users' data)."""
+    docs = (
+        db.collection("users")
+        .document(user_id)
+        .collection("chat_history")
+        .order_by("timestamp")
+        .stream()
+    )
     history = []
     for doc in docs:
         data = doc.to_dict()

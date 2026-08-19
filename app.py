@@ -8,7 +8,40 @@ from utils.firebase_config import init_firebase, save_chat_history
 
 st.set_page_config(page_title="AI Data Analytics Chatbot", layout="wide")
 
+# ---- LOGIN CHECK STARTS HERE ----
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+
+if not st.session_state['logged_in']:
+    st.title("🔐 Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if username == "user1" and password == "pass123":
+            st.session_state['logged_in'] = True
+            st.session_state['user_id'] = username
+            st.rerun()
+        elif username == "user2" and password == "pass456":
+            st.session_state['logged_in'] = True
+            st.session_state['user_id'] = username
+            st.rerun()
+        else:
+            st.error("Wrong username or password")
+
+    st.stop()
+# ---- LOGIN CHECK ENDS HERE ----
+
 db = init_firebase()
+
+# ---- LOGOUT BUTTON (sidebar top) ----
+with st.sidebar:
+    st.write(f"👤 Logged in as: **{st.session_state['user_id']}**")
+    if st.button("Logout"):
+        st.session_state['logged_in'] = False
+        st.session_state.pop('user_id', None)
+        st.session_state.pop('messages', None)
+        st.rerun()
 
 st.title("📊 AI Data Analytics Chatbot")
 st.markdown("Excel/CSV upload pannunga - **Statistics, Dashboard, Forecasting, Chat** ellam oru place la!")
@@ -136,17 +169,19 @@ if uploaded_file:
         with tab5:
             st.subheader("💬 Ask Your Data")
 
-            if "messages" not in st.session_state:
-                st.session_state.messages = []
+            # user-specific message key - ovvoru user ku thani chat history
+            msg_key = f"messages_{st.session_state['user_id']}"
+            if msg_key not in st.session_state:
+                st.session_state[msg_key] = []
 
-            for msg in st.session_state.messages:
+            for msg in st.session_state[msg_key]:
                 with st.chat_message(msg["role"]):
                     st.write(msg["content"])
 
             user_question = st.chat_input("Example: Which category has highest sales?")
 
             if user_question:
-                st.session_state.messages.append({"role": "user", "content": user_question})
+                st.session_state[msg_key].append({"role": "user", "content": user_question})
                 with st.chat_message("user"):
                     st.write(user_question)
 
@@ -154,7 +189,7 @@ if uploaded_file:
                     with st.spinner("Analyzing..."):
                         answer = ask_question(df, user_question)
                         st.write(answer)
-                        st.session_state.messages.append({"role": "assistant", "content": answer})
-                        save_chat_history(db, user_question, answer)
+                        st.session_state[msg_key].append({"role": "assistant", "content": answer})
+                        save_chat_history(db, st.session_state['user_id'], user_question, answer)
 else:
     st.info("👈 Sidebar la file upload pannunga start panna")
