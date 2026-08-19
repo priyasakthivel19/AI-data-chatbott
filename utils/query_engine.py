@@ -6,12 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("GROQ_API_KEY")
-API_URL = "https://api.groq.com/openai/v1/chat/completions"
-
+API_KEY = os.getenv("GEMINI_API_KEY")
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
 
 def generate_pandas_code(df, question):
-    """Ask the LLM to generate pandas code for the given question"""
+    """Ask Gemini to generate pandas code for the given question"""
 
     prompt = f"""You are a Python data analyst. Given a pandas DataFrame `df` with these columns:
 {list(df.columns)}
@@ -26,26 +25,29 @@ Example format: result = df['column'].sum()
 """
 
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}"
+        "Content-Type": "application/json"
     }
 
     payload = {
-        "model": "openai/gpt-oss-20b",
-        "messages": [
-            {"role": "system", "content": "You write only pandas code, nothing else. No explanations."},
-            {"role": "user", "content": prompt}
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
         ],
-        "temperature": 0
+        "generationConfig": {
+            "temperature": 0
+        }
     }
- 
+
     response = requests.post(API_URL, headers=headers, json=payload)
 
-    # If there's an error, raise it with full details for debugging
     if response.status_code != 200:
         raise Exception(f"Status: {response.status_code} | Response: {response.text}")
 
-    code = response.json()["choices"][0]["message"]["content"]
+    result_json = response.json()
+    code = result_json["candidates"][0]["content"]["parts"][0]["text"]
 
     # Clean up markdown code fences if present
     code = re.sub(r"```python|```", "", code).strip()
