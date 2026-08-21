@@ -5,46 +5,76 @@ from utils.query_engine import ask_question
 from utils.visualizer import auto_chart, correlation_heatmap, forecast_chart, dashboard_view
 from utils.stats_engine import descriptive_stats, correlation_analysis, detect_outliers, linear_trend_forecast
 from utils.firebase_config import init_firebase, save_chat_history
+from utils.firebase_auth import init_firebase_auth, sign_up, sign_in
 
 st.set_page_config(page_title="AI Data Analytics Chatbot", layout="wide")
 
-# ---- LOGIN CHECK STARTS HERE ----
+# ---- LOGIN / SIGNUP SECTION STARTS HERE ----
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
-    st.title("🔐 Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    st.title("🔐 AI Data Analytics Chatbot")
 
-    if st.button("Login"):
-        if username == "user1" and password == "pass123":
-            st.session_state['logged_in'] = True
-            st.session_state['user_id'] = username
-            st.rerun()
-        elif username == "user2" and password == "pass456":
-            st.session_state['logged_in'] = True
-            st.session_state['user_id'] = username
-            st.rerun()
-        else:
-            st.error("Wrong username or password")
+    auth = init_firebase_auth()
+
+    login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
+
+    # ---- LOGIN TAB ----
+    with login_tab:
+        st.subheader("Login with your email")
+        login_email = st.text_input("Email", key="login_email")
+        login_password = st.text_input("Password", type="password", key="login_password")
+
+        if st.button("Login", key="login_btn"):
+            if login_email and login_password:
+                success, result = sign_in(auth, login_email, login_password)
+                if success:
+                    st.session_state['logged_in'] = True
+                    st.session_state['user_email'] = login_email
+                    # localId is Firebase's unique ID for this user - used to keep each user's data separate
+                    st.session_state['user_id'] = result['localId']
+                    st.rerun()
+                else:
+                    st.error(result)
+            else:
+                st.warning("Please enter both email and password.")
+
+    # ---- SIGN UP TAB ----
+    with signup_tab:
+        st.subheader("Create a new account")
+        signup_email = st.text_input("Email", key="signup_email")
+        signup_password = st.text_input("Password (min 6 characters)", type="password", key="signup_password")
+        signup_password_confirm = st.text_input("Confirm Password", type="password", key="signup_password_confirm")
+
+        if st.button("Sign Up", key="signup_btn"):
+            if not signup_email or not signup_password:
+                st.warning("Please fill in all fields.")
+            elif signup_password != signup_password_confirm:
+                st.error("Passwords do not match.")
+            else:
+                success, result = sign_up(auth, signup_email, signup_password)
+                if success:
+                    st.success("Account created successfully! Please go to the Login tab to sign in.")
+                else:
+                    st.error(result)
 
     st.stop()
-# ---- LOGIN CHECK ENDS HERE ----
+# ---- LOGIN / SIGNUP SECTION ENDS HERE ----
 
 db = init_firebase()
 
 # ---- LOGOUT BUTTON (sidebar top) ----
 with st.sidebar:
-    st.write(f"👤 Logged in as: **{st.session_state['user_id']}**")
+    st.write(f"👤 Logged in as: **{st.session_state['user_email']}**")
     if st.button("Logout"):
         st.session_state['logged_in'] = False
         st.session_state.pop('user_id', None)
-        st.session_state.pop('messages', None)
+        st.session_state.pop('user_email', None)
         st.rerun()
 
 st.title("📊 AI Data Analytics Chatbot")
-st.markdown("Excel/CSV upload pannunga - **Statistics, Dashboard, Forecasting, Chat** ellam oru place la!")
+st.markdown("Upload a CSV or Excel file - **Statistics, Dashboard, Forecasting, and Chat**, all in one place!")
 
 with st.sidebar:
     st.header("📁 Upload Data")
@@ -93,7 +123,7 @@ if uploaded_file:
                     with cols[i % 2]:
                         st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Dashboard ku podhuma numeric/categorical columns illa.")
+                st.info("Not enough numeric/categorical columns to build a dashboard.")
 
             st.divider()
             st.subheader("🛠️ Custom Chart Builder")
@@ -114,7 +144,7 @@ if uploaded_file:
                 if heatmap_fig:
                     st.plotly_chart(heatmap_fig, use_container_width=True)
                 else:
-                    st.info("Kammiya 2 numeric columns venum.")
+                    st.info("At least 2 numeric columns are needed.")
 
         # TAB 3 - STATISTICS (Excel Data Analysis Style)
         with tab3:
@@ -123,7 +153,7 @@ if uploaded_file:
             if stats_df is not None:
                 st.dataframe(stats_df, use_container_width=True)
             else:
-                st.info("Numeric columns illa statistics ku.")
+                st.info("No numeric columns available for statistics.")
 
             st.divider()
             st.subheader("🔗 Correlation Matrix")
@@ -131,25 +161,25 @@ if uploaded_file:
             if corr_df is not None:
                 st.dataframe(corr_df, use_container_width=True)
             else:
-                st.info("Kammiya 2 numeric columns venum.")
+                st.info("At least 2 numeric columns are needed.")
 
             st.divider()
             st.subheader("⚠️ Outlier Detection")
             if numeric_cols:
-                outlier_col = st.selectbox("Column select pannunga", numeric_cols)
+                outlier_col = st.selectbox("Select a column", numeric_cols)
                 outliers, lower, upper = detect_outliers(df, outlier_col)
                 st.write(f"**Normal Range:** {lower:.2f} to {upper:.2f}")
                 st.write(f"**Outliers Found:** {len(outliers)}")
                 if len(outliers) > 0:
                     st.dataframe(outliers, use_container_width=True)
             else:
-                st.info("Numeric column illa outlier detection ku.")
+                st.info("No numeric column available for outlier detection.")
 
         # TAB 4 - FORECASTING
         with tab4:
             st.subheader("🔮 Trend Forecasting")
             if numeric_cols:
-                fc_col = st.selectbox("Predict panna venum ah column", numeric_cols)
+                fc_col = st.selectbox("Column to predict", numeric_cols)
                 periods = st.slider("Future periods", 1, 20, 5)
 
                 if st.button("Generate Forecast"):
@@ -161,15 +191,15 @@ if uploaded_file:
                         st.plotly_chart(fig, use_container_width=True)
                         st.write("**Predicted Values:**", [round(p, 2) for p in predictions])
                     else:
-                        st.warning("Forecast panna podhuma data illa.")
+                        st.warning("Not enough data to generate a forecast.")
             else:
-                st.info("Numeric column venum forecasting ku.")
+                st.info("A numeric column is needed for forecasting.")
 
         # TAB 5 - CHAT
         with tab5:
             st.subheader("💬 Ask Your Data")
 
-            # user-specific message key - ovvoru user ku thani chat history
+            # User-specific message key - each logged-in user gets their own separate chat history
             msg_key = f"messages_{st.session_state['user_id']}"
             if msg_key not in st.session_state:
                 st.session_state[msg_key] = []
@@ -192,4 +222,4 @@ if uploaded_file:
                         st.session_state[msg_key].append({"role": "assistant", "content": answer})
                         save_chat_history(db, st.session_state['user_id'], user_question, answer)
 else:
-    st.info("👈 Sidebar la file upload pannunga start panna")
+    st.info("👈 Upload a file from the sidebar to get started")
